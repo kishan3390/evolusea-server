@@ -1,0 +1,211 @@
+name: Development CI/CD
+
+on:
+  push:
+    branches: [main, staging, production]
+  pull_request: {}
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+env:
+  ECR_REGISTRY: 089117447164.dkr.ecr.ap-southeast-7.amazonaws.com
+  ECR_REPOSITORY: evolusea-backend-ecr-repository
+  AWS_DEFAULT_REGION: ap-southeast-7
+  APP_NAME: evolusea-backend
+  APP_DOMAIN: evolusea.com
+
+jobs:
+  prepare_envs:
+    name: Prepare envs
+    runs-on: ubuntu-latest
+    outputs:
+      ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
+      AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+      APP_NAME: ${{ env.APP_NAME }}
+      APP_DOMAIN: ${{ env.APP_DOMAIN }}
+      ENVIRONMENT: ${{ steps.envs.outputs.ENVIRONMENT }}
+      FINAL_ECR_IMAGE_TAG: ${{ steps.envs.outputs.FINAL_ECR_IMAGE_TAG }}
+      WORKSPACE_ECR_IMAGE_TAG: ${{ steps.envs.outputs.WORKSPACE_ECR_IMAGE_TAG }}
+      REPOSITORY_NAME: ${{ steps.envs.outputs.REPOSITORY_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Prepare outputs
+        id: envs
+        run: |
+          SHORT_COMMIT=$(git rev-parse --short HEAD)
+          APP_VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+          # Determine environment based on branch
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            ENVIRONMENT="development"
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            ENVIRONMENT="staging"
+          elif [[ "${{ github.ref_name }}" == "production" ]]; then
+            ENVIRONMENT="production"
+          else
+            ENVIRONMENT=""
+          fi
+
+          if [[ -z "$ENVIRONMENT" ]]; then
+            TAG_PREFIX=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          else
+            TAG_PREFIX="${ENVIRONMENT}"
+          fi
+
+          ECR_TAG="${TAG_PREFIX}-${APP_VERSION}-${SHORT_COMMIT}"
+          echo "ENVIRONMENT=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "FINAL_ECR_IMAGE_TAG=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:final-${ECR_TAG}" >> $GITHUB_OUTPUT
+          echo "WORKSPACE_ECR_IMAGE_TAG=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:workspace-${ECR_TAG}" >> $GITHUB_OUTPUT
+          echo "REPOSITORY_NAME=$(basename $PWD)" >> $GITHUB_OUTPUT
+
+  build_workspace_image:
+    needs: prepare_envs
+    name: Build, lint and publish workspace image
+    runs-on: ubuntu-latest
+    env:
+      WORKSPACE_ECR_IMAGE_TAG: ${{ needs.prepare_envs.outputs.WORKSPACE_ECR_IMAGE_TAG }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 'Login to GitHub Container Registry'
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Amazon ECR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ECR_REGISTRY }}
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Create aud use builder instance
+        run: |
+          docker buildx create --name builder --use
+
+      - name: Build, lint and publish image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ needs.prepare_envs.outputs.WORKSPACE_ECR_IMAGE_TAG }}
+          builder: builder
+          target: workspace
+          provenance: false
+
+  build_final_image:
+    name: Build, lint and publish final image
+    needs: [prepare_envs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 'Login to GitHub Container Registry'
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Amazon ECR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ECR_REGISTRY }}
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Create and use builder instance
+        run: |
+          docker buildx create --name builder --use
+
+      - name: Build and publish final image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ needs.prepare_envs.outputs.FINAL_ECR_IMAGE_TAG }}
+          builder: builder
+          target: production
+          provenance: false
+
+  tests:
+    name: Tests
+    needs: [prepare_envs, build_workspace_image]
+    uses: ./.github/workflows/tests.yaml
+    secrets: inherit
+    with:
+      workspace-ecr-image-tag: ${{ needs.prepare_envs.outputs.WORKSPACE_ECR_IMAGE_TAG }}
+      aws-region: ${{ needs.prepare_envs.outputs.AWS_DEFAULT_REGION }}
+      repository-name: ${{ needs.prepare_envs.outputs.REPOSITORY_NAME }}
+
+  test_final_image:
+    name: Test final image
+    needs: [build_final_image, prepare_envs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Amazon ECR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ECR_REGISTRY }}
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Create and use builder instance
+        run: |
+          docker buildx create --name builder --use
+
+      - name: Run tests on final image
+        env:
+          IMAGE_NAME: ${{ needs.prepare_envs.outputs.FINAL_ECR_IMAGE_TAG }}
+        run: |
+          touch .env
+          touch junit-smoke-tests.xml
+          docker compose -f compose.yml -f compose-prod.yml up --detach
+          ./scripts/wait-for-healthy.sh "${{ needs.prepare_envs.outputs.FINAL_ECR_IMAGE_TAG }}" final 120 compose.yml compose-prod.yml
+          docker compose -f compose.yml -f compose-prod.yml run -e URL_BASE=http://final:3000 workspace yarn run test:smoke-tests
+          docker compose -f compose.yml -f compose-prod.yml down
+
+      - name: Check for JUnit results
+        id: smoke_results
+        run: echo "has_content=$([ -s junit-smoke-tests.xml ] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+        if: always()
+
+      - name: Publish final image tests
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always() && steps.smoke_results.outputs.has_content == 'true'
+        with:
+          check_name: Report - Tests on final image
+          files: junit-smoke-tests.xml
+
+  deploy:
+    name: Deploy
+    if: github.event_name == 'push' && (needs.prepare_envs.outputs.ENVIRONMENT == 'development' || needs.prepare_envs.outputs.ENVIRONMENT == 'staging' || needs.prepare_envs.outputs.ENVIRONMENT == 'production')
+    needs: [prepare_envs, test_final_image, tests]
+    uses: ./.github/workflows/deploy.yaml
+    secrets: inherit
+    with:
+      final-ecr-image-tag: ${{ needs.prepare_envs.outputs.FINAL_ECR_IMAGE_TAG }}
+      app-name: ${{ needs.prepare_envs.outputs.APP_NAME }}
+      aws-region: ${{ needs.prepare_envs.outputs.AWS_DEFAULT_REGION }}
+      environment: ${{ needs.prepare_envs.outputs.ENVIRONMENT }}
+      domain-and-port: https://${{ needs.prepare_envs.outputs.APP_NAME }}-${{ needs.prepare_envs.outputs.ENVIRONMENT }}-api.${{ needs.prepare_envs.outputs.APP_DOMAIN }}

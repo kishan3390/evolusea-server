@@ -1,0 +1,55 @@
+services:
+  workspace:
+    container_name: workspace
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: workspace
+    volumes:
+      - .:/usr/src/app
+      - node-modules:/usr/src/app/node_modules
+    ports:
+      - 3000:3000
+      - 5433:5433
+    env_file:
+      - .env
+    networks:
+      - app-network
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=evolusea-backend
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    networks:
+      - app-network
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    volumes:
+      - pgadmin-data:/pgadmin4
+      - pgadmin-lib:/var/lib/pgadmin
+    ports:
+      - '8001:80'
+    depends_on:
+      - db
+    logging:
+      driver: none
+    profiles:
+      - development
+    networks:
+      - app-network
+networks:
+  app-network:
+volumes:
+  node-modules:
+  db-data:
+  pgadmin-data:
+  pgadmin-lib:

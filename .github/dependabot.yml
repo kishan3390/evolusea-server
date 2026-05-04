@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      time: '09:00'
+      timezone: 'Poland'
+    # Always increase the version requirement
+    # to match the new version.
+    versioning-strategy: increase

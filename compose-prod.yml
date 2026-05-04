@@ -1,0 +1,15 @@
+services:
+  final:
+    image: "${IMAGE_NAME}"
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 1s
+    env_file:
+      - .env
+    ports:
+      - 3001:3000
+    networks:
+      - app-network

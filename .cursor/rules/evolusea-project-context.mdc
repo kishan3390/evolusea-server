@@ -1,0 +1,80 @@
+---
+alwaysApply: true
+---
+
+# Evolusea Backend — Project Context
+
+You are working on the **Evolusea Backend** — a NestJS 11 + TypeORM 0.3 service powering an AI-driven spiritual guidance app for Southeast Asian markets (Thailand, Indonesia).
+
+## Architecture: DDD + CQRS (Non-Negotiable)
+
+This project uses Domain-Driven Design with CQRS. Every feature follows this exact layer structure:
+src/domain/<module>/
+├── application/
+│   ├── commands/<command-name>/
+│   │   ├── <command-name>.command.ts
+│   │   └── <command-name>.command-handler.ts
+│   ├── queries/<query-name>/
+│   │   ├── <query-name>.query.ts
+│   │   └── <query-name>.query-handler.ts
+│   └── events/<event-name>/
+│       └── <event-name>.event-handler.ts
+├── domain/
+│   ├── <entity-name>.ts          # Domain entity with business logic
+│   ├── <repository>.ts           # Abstract repository interface
+│   └── <enums>.ts
+├── infrastructure/
+│   ├── entities/<entity>.entity.ts  # TypeORM entity
+│   ├── mappers/                     # Domain <-> persistence mappers
+│   ├── repositories/                # Repository implementations
+│   └── tasks/                       # Cron tasks (optional)
+├── <module>.facade.ts              # Abstract facade interface
+├── <module>.real.facade.ts         # Facade implementation
+└── <module>.module.ts              # NestJS module definition
+
+Controllers live in `src/http-app/` — NEVER in domain modules.
+
+## Critical Patterns
+
+- **Facade Pattern**: Controllers ONLY call facades. Never import command/query handlers in controllers.
+- **Repository Pattern**: Domain layer defines abstract repositories. Infrastructure implements them.
+- **Mapper Pattern**: Explicit mapping between domain entities and TypeORM entities. Never use TypeORM entities directly in domain logic.
+- **Business Rules**: Use `SyncBusinessRule` / `AsyncBusinessRule` with `checkRule()` / `checkAsyncRule()`. They throw `DomainRuleViolationError`.
+- **Domain Events**: Side effects use `InMemoryDomainEventMediator` with `@OnDomainEvent()` decorator. Events are published after command execution.
+- **Transaction Management**: Commands run within transactions where needed.
+- **Distributed Locking**: Scheduled tasks use DB-backed locks to prevent concurrent execution.
+
+## Naming Conventions
+
+- Files: `kebab-case` (e.g., `create-note.command-handler.ts`)
+- Classes: `PascalCase` (e.g., `CreateNoteCommandHandler`)
+- Database tables: `snake_case` (automatic via `SnakeNamingStrategy`)
+- Enums: `PascalCase` keys with `kebab-case` values
+
+## Tech Stack
+
+- NestJS 11, TypeScript 5.8, Node.js 22
+- PostgreSQL 16, TypeORM 0.3
+- Firebase Admin SDK (auth)
+- AI: OpenAI + Gemini via provider-agnostic `AiFacade`
+- RevenueCat (payments), Strapi (CMS)
+- Vitest (testing), Testcontainers (E2E)
+- Yarn 1.22
+
+## AI Integration
+
+- All AI calls go through the abstract `AiFacade` which routes to OpenAI or Gemini via `AiRealFacade`.
+- Prompt templates are Handlebars `.hbs` files in `prompts/` directory, compiled by `HandlebarsTemplateService`.
+- Default provider: Gemini (`gemini-2.5-flash`). Planned: GPT-4.1 mini for chat, Gemini for utilities.
+- Response format: `{ message?: string, actions?: AiAction[] }`
+- Prompt injection is sanitized globally via `BodyPromptMarkupSanitizerInterceptor`.
+
+## What NOT To Do
+
+- NEVER put business logic in controllers
+- NEVER import TypeORM entities in the domain layer
+- NEVER call command/query handlers directly from controllers (use facades)
+- NEVER create a service class — use command/query handlers instead
+- NEVER use `synchronize: true` — always create migrations
+- NEVER hardcode AI provider — always go through AiFacade
+- NEVER skip the mapper between domain and persistence entities

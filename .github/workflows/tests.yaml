@@ -1,0 +1,136 @@
+name: Tests
+
+on:
+  workflow_call:
+    inputs:
+      workspace-ecr-image-tag:
+        required: true
+        type: string
+      repository-name:
+        required: true
+        type: string
+      aws-region:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  unit_tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Pull workspace image
+        run: |
+          touch .env
+          docker pull ${{ inputs.workspace-ecr-image-tag }}
+          docker image tag ${{ inputs.workspace-ecr-image-tag }} "${{ inputs.repository-name }}_workspace"
+          touch junit-unit.xml && touch junit-e2e.xml
+
+      - name: Run unit tests
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$(pwd)/junit-unit.xml:/usr/src/app/junit-unit.xml" -v "$(pwd)/junit-e2e.xml:/usr/src/app/junit-e2e.xml" ${{ inputs.workspace-ecr-image-tag }} yarn test
+
+      - name: Publish unit tests results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          check_name: Report - Unit tests
+          files: |
+            junit-unit.xml
+
+  e2e_tests:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Pull workspace image
+        run: |
+          touch .env
+          docker pull ${{ inputs.workspace-ecr-image-tag }}
+          docker image tag ${{ inputs.workspace-ecr-image-tag }} "${{ inputs.repository-name }}_workspace"
+          touch junit-unit.xml && touch junit-e2e.xml
+
+      - name: Run E2E tests
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$(pwd)/junit-unit.xml:/usr/src/app/junit-unit.xml" -v "$(pwd)/junit-e2e.xml:/usr/src/app/junit-e2e.xml" ${{ inputs.workspace-ecr-image-tag }} yarn test:e2e
+
+      - name: Publish E2E tests results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          check_name: Report - E2E tests
+          files: |
+            junit-e2e.xml
+
+  smoke_tests_localhost:
+    name: Smoke tests on localhost
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Pull workspace image
+        run: |
+          touch .env
+          docker pull ${{ inputs.workspace-ecr-image-tag }}
+          docker image tag ${{ inputs.workspace-ecr-image-tag }} "${{ inputs.repository-name }}_workspace"
+          touch junit-unit.xml && touch junit-smoke-tests.xml
+
+      - name: Run smoke tests on localhost
+        run: |
+          docker compose up --detach
+          timeout --foreground 180s bash -c "docker compose logs --follow workspace | grep --line-buffered -q \"Nest application successfully started\""
+          docker compose exec -e URL_BASE=http://workspace:3000 workspace yarn run test:smoke-tests
+
+      - name: Publish E2E tests results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          check_name: Report - Smoke tests on localhost
+          files: |
+            junit-smoke-tests.xml

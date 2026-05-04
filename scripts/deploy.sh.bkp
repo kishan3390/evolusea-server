@@ -1,0 +1,125 @@
+#!/bin/bash
+
+# It is deployment script.
+# It creates all files needed to deploy the app to
+# AWS ElasticBeanstalk service.
+# Required options:
+# -e - it is environment, can be development, staging or production,
+# -r - it is aws region
+# -n - it is aws elasticbeanstalk application name
+# -t - it is full image tag
+
+set -e # stop script on first error
+
+env=""
+aws_region=""
+ecr_image_tag=""
+aws_eb_app_name=""
+
+while getopts e:t:r:n: flag
+do
+  case "${flag}" in
+    r) aws_region=${OPTARG};;
+    e) env=${OPTARG};;
+    t) ecr_image_tag=${OPTARG};;
+    n) aws_eb_app_name=${OPTARG};;
+  esac
+done
+
+if [ -z $aws_region ]
+then
+  echo "aws region is required"
+  exit -1
+elif [ -z $env ]
+then
+  echo "env is required"
+  exit -1
+elif [ -z $ecr_image_tag ]
+then
+  echo "ecr image tag is required"
+  exit -1
+elif [ -z $aws_eb_app_name ]
+then
+  echo "aws eb app name is required"
+  exit -1
+fi
+
+if [ $env != "development" ] && [ $env != "staging" ] && [ $env != "production" ]
+then
+  echo "Invalid env $env"
+  exit -1
+fi
+
+aws_eb_env_name="$aws_eb_app_name-$env"
+version=$(echo $ecr_image_tag | cut -d: -f2)
+
+echo "--------------------------------------------------------------------------------"
+echo "Settings:"
+echo "* env: $env"
+echo "* aws_eb_app_name: $aws_eb_app_name"
+echo "* aws_eb_env_name: $aws_eb_env_name"
+echo "* aws_region: $aws_region"
+echo "* ecr_image_tag: $ecr_image_tag"
+echo "* version: $version"
+echo "--------------------------------------------------------------------------------"
+
+echo "Preapre EB app version files"
+
+echo "Create temp dir"
+DEPLOY_WORK_DIR="$(mktemp -d)"
+echo "Temp dir created $DEPLOY_WORK_DIR"
+
+echo "create .ebingore"
+touch $DEPLOY_WORK_DIR/.ebignore
+
+echo "create Dockerrun.aws.json"
+cat <<END > $DEPLOY_WORK_DIR/Dockerrun.aws.json
+{
+ "AWSEBDockerrunVersion": "1",
+  "Image": {
+    "Name": "$ecr_image_tag",
+    "Update": "true"
+  },
+  "Ports": [
+    {
+      "ContainerPort": "3000"
+    }
+  ],
+  "Logging": "/var/log"
+}
+END
+
+# ECR registry hostname (e.g. 089117447164.dkr.ecr.ap-southeast-7.amazonaws.com)
+ecr_registry=$(echo "$ecr_image_tag" | cut -d'/' -f1)
+
+echo "create .ebextensions/01_ecr_login.config (registry=$ecr_registry)"
+mkdir -p $DEPLOY_WORK_DIR/.ebextensions
+cat <<END > $DEPLOY_WORK_DIR/.ebextensions/01_ecr_login.config
+commands:
+  01_ecr_login:
+    command: |
+      aws ecr get-login-password --region $aws_region | docker login --username AWS --password-stdin $ecr_registry
+    ignoreErrors: false
+END
+
+echo "create .elasticbeanstalk/config.yml"
+mkdir $DEPLOY_WORK_DIR/.elasticbeanstalk
+# Bundle Dockerrun.aws.json + .ebextensions so ECR login runs on the instance
+(cd $DEPLOY_WORK_DIR && zip -r app.zip Dockerrun.aws.json .ebextensions -x "*.DS_Store")
+cat <<END > $DEPLOY_WORK_DIR/.elasticbeanstalk/config.yml
+global:
+  application_name: $aws_eb_app_name
+  default_platform: docker
+  default_region: $aws_region
+  workspace_type: Application
+deploy:
+  artifact: app.zip
+END
+
+echo "--------------------------------------------------------------------------------"
+
+echo "run eb deploy"
+cd $DEPLOY_WORK_DIR
+
+eb deploy $aws_eb_env_name --region $aws_region --label $version
+

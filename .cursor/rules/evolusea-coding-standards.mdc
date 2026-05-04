@@ -1,0 +1,39 @@
+---
+alwaysApply: true
+---
+
+# Evolusea Coding Standards
+
+## Validation
+- Request validation: `class-validator` decorators on DTOs
+- Global `ValidationPipe` with `transform: true` and `whitelist: true`
+- Domain validation: `BusinessRule` pattern with `checkRule()` / `checkAsyncRule()`
+
+## Testing Requirements
+- Unit tests use `.spec.ts` suffix, co-located with source
+- E2E tests in `test/` directory using Testcontainers (real PostgreSQL)
+- Smoke tests for deployed API health checks
+- Use `AiFakeFacade` for testing AI-dependent features
+- Use `TestAppFactory` for E2E test bootstrapping
+
+## Database
+- Migrations only — never `synchronize: true`
+- Auto-generate: `yarn run migration:autogenerate src/migrations/<Name>`
+- SnakeNamingStrategy for all table/column names
+- UUID primary keys, TIMESTAMPTZ for all timestamps
+
+## Module Registration
+- New domain modules must be imported in `src/http-app/http-app.module.ts`
+- New controllers go in `src/http-app/controllers/`
+- Facades are provided at the module level with `{ provide: AbstractFacade, useClass: RealFacade }`
+
+## Error Handling
+- Domain errors: throw specific error types (e.g., `DomainRuleViolationError`, `EntityNotFoundError`)
+- HTTP layer: `ExceptionFilter` maps domain errors to HTTP responses
+- Never catch and swallow errors silently
+
+## Scheduled Tasks
+- Use `@Cron()` decorator from `@nestjs/schedule`
+- All times in UTC (server timezone)
+- Always use distributed locking for tasks that modify data
+- Bangkok = UTC+7 (so midnight Bangkok = 17:00 UTC)

@@ -1,0 +1,154 @@
+############################
+# Environment & Secrets
+############################
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+service-account*.json
+credentials*.json
+secret*.json
+
+############################
+# Compiled Output
+############################
+**/dist
+**/build
+**/out
+**/node_modules
+*.tsbuildinfo
+src/metadata.ts
+
+############################
+# Logs
+############################
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+cli-results/
+
+############################
+# Tests & Coverage
+############################
+/coverage
+/.nyc_output
+junit-*.xml
+test-results/
+.vitest/
+
+############################
+# OS Files
+############################
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+._*
+
+############################
+# IDEs and Editors
+############################
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+*.launch
+
+# Other
+*.sublime-workspace
+*.sublime-project
+.c9/
+*.swp
+*.swo
+*~
+
+############################
+# Docker
+############################
+docker-compose.override.yml
+
+############################
+# Package Managers
+############################
+# Note: yarn.lock and package-lock.json are intentionally tracked
+# to ensure reproducible builds across environments
+.yarn/*
+!.yarn/cache
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+.npm
+.pnpm-store
+# Yarn integrity file
+.yarn-integrity
+**/node_modules/.yarn-integrity
+
+############################
+# Temporary Files
+############################
+*.tmp
+*.temp
+*.cache
+.cache/
+tmp/
+temp/
+
+############################
+# Team Tools
+############################
+team-tools/firebase-messaging/config.js
+team-tools/firebase-auth-app/src/firebase-config.ts
+
+############################
+# Database
+############################
+*.sqlite
+*.sqlite3
+*.db
+
+############################
+# Terraform
+############################
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+############################
+# AWS
+############################
+.aws/
+eb-logs.zip
+eb-logs-*/
+
+############################
+# Sentry
+############################
+.sentryclirc

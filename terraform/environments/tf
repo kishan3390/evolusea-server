@@ -1,0 +1,5 @@
+#!/bin/bash
+# Wrapper so you can run ./tf init from this directory. Uses Terraform 1.14.x.
+set -e
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+exec "$REPO_ROOT/scripts/tf.sh" "$@"

@@ -1,0 +1,105 @@
+---
+description: 
+alwaysApply: true
+---
+
+MANDATORY: Before completing ANY code change, perform Impact Analysis.
+Every code change in this DDD/CQRS codebase has ripple effects. You MUST trace the full dependency chain and update ALL affected files. Never submit a partial change.
+The Dependency Chain
+A single change to a domain entity can affect up to 10+ files. Trace this chain for EVERY change:
+Domain Entity changed?
+  → Mapper (domain ↔ TypeORM)
+  → TypeORM Entity (infrastructure/entities/)
+  → Migration (if schema changed)
+  → migrations.ts registry
+  → Repository interface (domain/)
+  → Repository implementation (infrastructure/repositories/)
+  → Command/Query handlers that use this entity
+  → Facade (abstract + real) if handler signatures changed
+  → Controller + DTOs if facade signatures changed
+  → Unit tests for handlers/mappers
+  → E2E tests if API contract changed
+  → Prompt templates if entity data is injected into AI prompts
+Impact Analysis Checklist
+After writing new code or modifying existing code, ALWAYS run through this checklist BEFORE presenting the result:
+Layer 1: Domain Changes
+
+ Domain entity modified? → Update the mapper, TypeORM entity, and any business rules
+ New field on entity? → Add to: mapper (both directions), TypeORM entity column, migration, DTOs (request + response), repository queries if used in filters
+ Field removed from entity? → Same chain as above, in reverse — remove from all layers
+ New enum value? → Check all switch/if statements across handlers that use this enum
+ Business rule changed? → Check all command handlers that call checkRule() with this rule
+
+Layer 2: Infrastructure Changes
+
+ TypeORM entity changed? → Generate migration, register in migrations.ts
+ Repository method added/changed? → Update abstract interface in domain layer, update all callers in command/query handlers
+ New relationship/FK? → Update cascade rules, check delete flows, update mappers for nested entities
+
+Layer 3: Application Changes
+
+ Command handler signature changed? → Update facade method (abstract + real), update controller, update DTOs
+ Query handler return type changed? → Update facade, controller response DTO, any event handlers that call this query
+ New domain event emitted? → Check if existing event handlers need updating, or create new handler
+ Event handler modified? → Check if other modules listen to the same event
+
+Layer 4: HTTP/API Changes
+
+ Controller endpoint changed? → Update request/response DTOs, check mobile app API routes in d_* modules
+ DTO field added/removed? → Verify class-validator decorators, check if mobile DTOs need updating
+ Auth guard changed? → Check all routes using that guard
+
+Layer 5: Cross-Module Dependencies
+
+ Compass module changed? → Check: AiModule, PromptDomain (prompt templates may need updating)
+ Note module changed? → Check: AiModule, PromptDomain (note-summarize.hbs)
+ Account module changed? → Check: PurchaseDomain (entitlements), all modules using GetAccountById or GetIsPremiumAccount
+ User Profile changed? → Check: Compass (belief system determines AI archetype), Quote (belief-based filtering), Calendar (belief-based events)
+ Notification module changed? → Check: Path (reminders), Calendar (event alerts)
+ Purchase module changed? → Check: Account (entitlements sync)
+ Prompt templates changed? → Check: all command handlers that compile and use that template
+
+Layer 6: AI Integration
+
+ Prompt template modified? → Verify all Handlebars variables ({{var}}) still exist in the context passed by the query handler
+ AI tool/function definition changed? → Update the handler that processes tool call responses
+ AiFacade params changed? → Update all callers across Compass, Note, Quote, Calendar modules
+
+Layer 7: Testing
+
+ Any handler changed? → Update or create unit test (.spec.ts co-located)
+ API contract changed? → Update E2E tests in test/
+ AI behavior changed? → Update AiFakeFacade mock expectations in tests
+
+Cross-Repository Awareness
+This backend serves the Flutter mobile app. Flag (do not silently ignore) when changes affect the mobile API contract:
+
+New/removed API fields → Mobile DTOs in d_* modules need updating
+New endpoints → Mobile API routes need adding
+Changed auth requirements → Mobile interceptors may need updating
+Changed error codes → Mobile error handling may need updating
+
+When you detect a mobile-impacting change, explicitly state:
+
+⚠️ Mobile Impact: This change affects the API contract. The Flutter app's d_<module>/ data module will need corresponding updates to [specific files].
+
+How To Present Impact Analysis
+After completing a code change, include a brief impact summary:
+### Files Changed
+- src/domain/note/domain/note.ts (added mood field)
+- src/domain/note/infrastructure/entities/note.entity.ts (added mood column)
+- src/domain/note/infrastructure/mappers/note.mapper.ts (map mood both directions)
+- src/migrations/AddMoodToNote.ts (new migration)
+- src/migrations/migrations.ts (registered migration)
+- src/http-app/dto/note/create-note.dto.ts (added mood validation)
+- src/http-app/dto/note/note-response.dto.ts (added mood to response)
+
+### Verified No Impact
+- Note summarize prompt (note-summarize.hbs) — does not use mood field currently
+- Vision board queries — do not include note mood in responses
+
+### ⚠️ Mobile Impact
+- d_notes module: Note model needs `mood` field added
+- d_notes API routes: create/update DTOs need mood parameter
+The Golden Rule
+If you change a file and don't check what depends on it, you are creating a bug. Every change must be traced through the dependency chain. When in doubt, search the codebase for imports/usages of the changed class, interface, or type.

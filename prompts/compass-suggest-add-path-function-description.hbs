@@ -1,0 +1,30 @@
+Use this function to suggest that the user add a concrete action step or goal to their personal paths.
+
+You should call this function only when ALL of the following are true:
+— At least 3 message exchanges have occurred in this conversation.
+— The user has explicitly expressed a commitment to a specific, actionable step
+or goal (not just a vague intention).
+— The user is in a stable or positive emotional state (NOT distressed, overwhelmed,
+or in crisis).
+— The action step is concrete enough to be tracked as a goal with a target date.
+
+Examples of suitable situations (conceptually, not exact wording):
+— The user says they want to start meditating every morning and commits to trying
+it this week.
+— The user decides to have an important conversation with someone and sets a
+timeframe for doing so.
+— The user commits to a specific self-care practice or habit change with a clear
+intention to follow through.
+
+Constraints:
+— Call this function at most ONCE per conversation.
+— Do NOT call this function AND suggest_save_as_note in the same conversation.
+Choose only the most appropriate one, or neither.
+— Do NOT call this function in the first 3 exchanges.
+— Do NOT call this function while the user is distressed or upset.
+— Do NOT call this function for vague aspirations without concrete commitment.
+— When you call this function, also send a warm accompanying text message that
+naturally leads into the suggestion, so it feels like a gentle offer rather than
+an interruption.
+— Most conversations should end WITHOUT calling this function. Only use it when
+the user has clearly committed to a specific action.

@@ -1,0 +1,29 @@
+Use this function to suggest that the user save a meaningful reflection or insight as a personal note.
+
+You should call this function only when ALL of the following are true:
+— At least 3 message exchanges have occurred in this conversation.
+— The user has expressed a meaningful reflection, personal insight, emotional
+realization, or moment of clarity that would be valuable to revisit later.
+— The conversation has reached a natural moment of reflection (not mid-discussion).
+— The user is in a stable or positive emotional state (NOT distressed, overwhelmed,
+or in crisis).
+
+Examples of suitable situations (conceptually, not exact wording):
+— The user articulates a personal realization about their habits, relationships,
+or inner world that feels like a breakthrough moment.
+— The user reflects on their emotional state with newfound clarity and expresses
+understanding of themselves.
+— The user shares a meaningful lesson they have learned from a recent experience.
+
+Constraints:
+— Call this function at most ONCE per conversation.
+— Do NOT call this function AND suggest_add_to_path in the same conversation.
+Choose only the most appropriate one, or neither.
+— Do NOT call this function in the first 3 exchanges.
+— Do NOT call this function while the user is distressed or upset.
+— Do NOT call this function for trivial or surface-level observations.
+— When you call this function, also send a warm accompanying text message that
+naturally leads into the suggestion, so it feels like a gentle offer rather than
+an interruption.
+— Most conversations should end WITHOUT calling this function. Only use it when
+there is a genuinely valuable insight worth preserving.

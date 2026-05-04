@@ -1,0 +1,18 @@
+---
+alwaysApply: true
+---
+
+# Key File Locations
+
+When you need to understand existing patterns, reference these files:
+
+- Architecture entry: `src/http-app/http-app.module.ts`
+- Example domain module: `src/domain/compass/` (most complete)
+- AI facade: `src/ai/ai.facade.ts` and `src/ai/ai-real.facade.ts`
+- Building blocks: `src/building-blocks/` (Entity, BusinessRule, etc.)
+- Prompt templates: `prompts/` directory (Handlebars .hbs files)
+- Config: `src/config/config.ts` (ConfigProvider)
+- Migrations: `src/migrations/`
+- E2E test infra: `test/helpers/` (TestAppFactory, AppContainersFactory)
+
+Always read existing implementations before creating new ones. Match the patterns exactly.

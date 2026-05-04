@@ -1,0 +1,22 @@
+Use this function to close the conversation with the user.
+
+You should call this function only when BOTH of the following are true:
+— The user clearly indicates that their goal in this conversation has been achieved
+and they do not need any further assistance in this chat.
+— There is no sign that the user wants to ask additional questions or continue
+working on related tasks in this chat.
+
+Examples of suitable situations (conceptually, not exact wording):
+— The user expresses clear satisfaction with the outcome AND explicitly indicates
+that they are done in this chat (for example, they say that everything is resolved
+and they will not continue this conversation).
+— The system forces you to use a tool instead of sending a normal reply.
+In that case, assume that the hard conversation limit has been reached and you
+must close the chat by calling this function.
+
+Constraints:
+— Do NOT call this function only because the conversation is long or near a limit.
+— Do NOT call this function if the user is still asking questions, exploring options,
+or could reasonably expect further help in this chat.
+— When you call this function, include a short, friendly goodbye with a brief
+summary of the outcome for the user.

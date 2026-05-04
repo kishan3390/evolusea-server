@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      final-ecr-image-tag:
+        required: true
+        type: string
+      app-name:
+        required: true
+        type: string
+      aws-region:
+        required: true
+        type: string
+      environment:
+        type: string
+        required: true
+      domain-and-port:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - uses: sparkplug-app/install-eb-cli-action@v1.1.1
+
+      - name: Deploy to ${{ inputs.environment }}
+        run: |
+          ./scripts/deploy.sh -r ${{ inputs.aws-region }} -e ${{ inputs.environment }} -t ${{ inputs.final-ecr-image-tag }} -n ${{ inputs.app-name }}
+
+      - name: Wait for app startup
+        run: sleep 1m
+
+      - name: Verify deployment
+        env:
+          DOMAIN_AND_PORT: ${{ inputs.domain-and-port }}
+        run: |
+          ./scripts/verify-deployment.sh
